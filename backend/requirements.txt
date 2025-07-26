@@ -1,0 +1,18 @@
+# FastAPI core
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Image & camera processing
+opencv-python==4.8.1.78
+pillow==10.1.0
+numpy==1.25.2
+
+# File upload support
+python-multipart==0.0.6
+aiofiles==23.2.1
+
+# FastAPI models
+pydantic==2.5.0
+
+# Optional: PiCamera2 (install manually if needed)
+# picamera2==0.3.12

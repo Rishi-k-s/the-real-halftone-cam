@@ -1,0 +1,2 @@
+# This file ensures the captures directory is tracked by git
+# while ignoring the actual capture files
