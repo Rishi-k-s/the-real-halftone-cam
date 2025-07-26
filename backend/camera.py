@@ -18,30 +18,29 @@ class CameraManager:
         self.camera_type = None
         
     def _try_pi_camera(self, width: int = 1280, height: int = 720) -> bool:
-        """Try to initialize Raspberry Pi camera"""
+        """Try to initialize Raspberry Pi camera using picamzero"""
         try:
-            from picamera2 import Picamera2
-            self.pi_camera = Picamera2()
+            from picamzero import Camera
             
-            # Configure camera
-            config = self.pi_camera.create_still_configuration(
-                main={"size": (width, height), "format": "RGB888"}
-            )
-            self.pi_camera.configure(config)
-            self.pi_camera.start()
+            # Initialize the camera
+            self.pi_camera = Camera()
             
-            # Test capture
-            time.sleep(2)  # Allow camera to warm up
-            test_frame = self.pi_camera.capture_array()
+            # Set resolution if supported
+            try:
+                self.pi_camera.resolution = (width, height)
+            except AttributeError:
+                # Some versions might not support direct resolution setting
+                logger.info("Resolution setting not supported, using default")
             
-            if test_frame is not None and test_frame.size > 0:
-                self.active_camera = self.pi_camera
-                self.camera_type = "pi_camera"
-                logger.info(f"Pi Camera initialized successfully at {width}x{height}")
-                return True
-            else:
-                self._cleanup_pi_camera()
-                return False
+            # Test the camera by starting preview briefly
+            self.pi_camera.start_preview()
+            time.sleep(1)  # Brief warm-up
+            self.pi_camera.stop_preview()
+            
+            self.active_camera = self.pi_camera
+            self.camera_type = "pi_camera"
+            logger.info(f"Pi Camera initialized successfully with picamzero")
+            return True
                 
         except Exception as e:
             logger.warning(f"Failed to initialize Pi Camera: {str(e)}")
@@ -165,29 +164,42 @@ class CameraManager:
             timestamp = datetime.now().isoformat()
             
             if self.camera_type == "pi_camera":
-                # Capture with Pi Camera
-                frame = self.pi_camera.capture_array()
-                
-                # Convert RGB to BGR for OpenCV
-                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-                
-                # Save image
-                success = cv2.imwrite(output_path, frame_bgr)
-                
-                if success:
-                    return {
-                        "success": True,
-                        "camera_type": self.camera_type,
-                        "timestamp": timestamp,
-                        "file_path": output_path,
-                        "resolution": frame.shape[:2][::-1],  # (width, height)
-                        "message": "Photo captured successfully with Pi Camera"
-                    }
-                else:
+                # Capture with Pi Camera using picamzero
+                try:
+                    # Take photo directly to file
+                    self.pi_camera.take_photo(output_path)
+                    
+                    # Verify the file was created and get its properties
+                    if os.path.exists(output_path):
+                        # Get image dimensions using cv2
+                        img = cv2.imread(output_path)
+                        if img is not None:
+                            height, width = img.shape[:2]
+                            return {
+                                "success": True,
+                                "camera_type": self.camera_type,
+                                "timestamp": timestamp,
+                                "file_path": output_path,
+                                "resolution": (width, height),
+                                "message": "Photo captured successfully with Pi Camera"
+                            }
+                        else:
+                            return {
+                                "success": False,
+                                "message": "Failed to read captured image",
+                                "error": "Image file corrupt or unreadable"
+                            }
+                    else:
+                        return {
+                            "success": False,
+                            "message": "Photo file not created",
+                            "error": "take_photo did not create file"
+                        }
+                except Exception as e:
                     return {
                         "success": False,
-                        "message": "Failed to save image",
-                        "error": "Image write failed"
+                        "message": "Failed to capture photo",
+                        "error": f"picamzero error: {str(e)}"
                     }
                     
             elif self.camera_type == "usb_camera":
@@ -219,6 +231,12 @@ class CameraManager:
                         "message": "Failed to capture frame",
                         "error": "Camera read failed"
                     }
+            else:
+                return {
+                    "success": False,
+                    "message": "Unknown camera type",
+                    "error": f"Unsupported camera type: {self.camera_type}"
+                }
             
         except Exception as e:
             logger.error(f"Capture error: {str(e)}")
@@ -240,7 +258,7 @@ class CameraManager:
     def _test_pi_camera(self) -> bool:
         """Test if Pi camera is available without initializing"""
         try:
-            from picamera2 import Picamera2
+            from picamzero import Camera
             return True
         except ImportError:
             return False
@@ -263,8 +281,9 @@ class CameraManager:
         """Clean up Pi camera resources"""
         if self.pi_camera:
             try:
-                self.pi_camera.stop()
-                self.pi_camera.close()
+                # picamzero cameras don't need explicit cleanup like picamera2
+                # Just ensure any preview is stopped
+                self.pi_camera.stop_preview()
             except Exception:
                 pass
             self.pi_camera = None

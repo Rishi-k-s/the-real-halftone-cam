@@ -7,12 +7,12 @@ opencv-python==4.8.1.78
 pillow==10.1.0
 numpy==1.25.2
 
+# Raspberry Pi Camera (simple interface)
+picamzero
+
 # File upload support
 python-multipart==0.0.6
 aiofiles==23.2.1
 
 # FastAPI models
 pydantic==2.5.0
-
-# Optional: PiCamera2 (install manually if needed)
-# picamera2==0.3.12
